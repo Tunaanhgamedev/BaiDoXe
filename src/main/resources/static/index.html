@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=yes"
+    />
+    <title>CloudPark IQ | All-in-One Parking Management</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts (Inter) -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-database-compat.js"></script>
+    <style>
+      * {
+        font-family: "Inter", sans-serif;
+      }
+      body {
+        background: #05070f;
+      }
+
+      /* Custom glow & pulse animations */
+      @keyframes soft-pulse {
+        0% {
+          opacity: 0.6;
+          text-shadow: 0 0 0px rgba(16, 185, 129, 0.2);
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.2);
+        }
+        70% {
+          opacity: 1;
+          text-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+          box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+        }
+        100% {
+          opacity: 0.6;
+          text-shadow: 0 0 0px rgba(16, 185, 129, 0.2);
+          box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+        }
+      }
+      .live-badge-pulse {
+        animation: soft-pulse 1.8s infinite ease;
+      }
+      .glow-number {
+        transition: all 0.2s;
+      }
+      .gate-tile {
+        transition:
+          transform 0.2s ease,
+          border-color 0.2s;
+      }
+      .gate-tile:hover {
+        transform: translateY(-3px);
+      }
+      /* Custom scroll */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 5px;
+        height: 5px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: #0f172a;
+        border-radius: 10px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #2d3a5e;
+        border-radius: 10px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #4b6a9b;
+      }
+    </style>
+  </head>
+  <body class="bg-[#030614] text-slate-200 custom-scrollbar">
+    <div class="max-w-[1600px] mx-auto px-5 md:px-8 py-6 md:py-8">
+      <!-- HEADER SECTION (simple title + live badge, no menu) -->
+      <div class="flex flex-wrap justify-between items-center mb-8 gap-4">
+        <div class="flex items-center gap-3">
+          <div
+            class="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center shadow-xl"
+          >
+            <i data-lucide="cloud" class="w-6 h-6 text-white"></i>
+          </div>
+          <div>
+            <h1
+              class="text-2xl md:text-3xl font-black tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent"
+            >
+              CloudPark <span class="text-cyan-400">IQ</span>
+            </h1>
+            <p class="text-slate-500 text-xs md:text-sm">
+              Decentralized parking • Real-time monitoring
+            </p>
+          </div>
+        </div>
+        <div
+          class="flex items-center gap-3 bg-slate-900/60 backdrop-blur-sm px-5 py-2 rounded-full border border-slate-700/60"
+        >
+          <span class="relative flex h-3 w-3">
+            <span
+              class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
+            ></span>
+            <span
+              class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"
+            ></span>
+          </span>
+          <span class="text-sm font-mono text-slate-300"
+            >LIVE FIREBASE SYNC</span
+          >
+          <i data-lucide="zap" class="w-4 h-4 text-emerald-400"></i>
+        </div>
+      </div>
+
+      <!-- ========= 1. REAL-TIME STATUS WIDGET (GLOWING COUNTER) ========= -->
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Main occupancy card - large glowing -->
+        <div
+          class="lg:col-span-3 bg-gradient-to-br from-slate-900 to-[#0a0f1c] rounded-2xl border border-slate-700/50 p-6 shadow-2xl relative overflow-hidden"
+        >
+          <div
+            class="absolute top-0 right-0 w-40 h-40 bg-emerald-500/5 rounded-full blur-3xl"
+          ></div>
+          <div
+            class="flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+          >
+            <div>
+              <div class="flex items-center gap-2 text-slate-400 text-sm mb-2">
+                <i data-lucide="parking-circle" class="w-4 h-4"></i>
+                <span>REAL-TIME OCCUPANCY</span>
+                <span
+                  class="bg-emerald-500/20 text-emerald-300 text-[11px] px-2 py-0.5 rounded-full flex items-center gap-1 live-badge-pulse"
+                >
+                  <span
+                    class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"
+                  ></span>
+                  LIVE
+                </span>
+              </div>
+              <div class="flex items-baseline flex-wrap gap-2">
+                <span
+                  class="text-7xl md:text-8xl font-black text-white tracking-tighter glow-number"
+                  id="availableSpotsCount"
+                  >--</span
+                >
+                <span class="text-3xl text-slate-400 font-semibold"
+                  >/<span id="totalSpots">100</span></span
+                >
+                <span
+                  class="ml-2 text-sm bg-slate-800/80 px-3 py-1.5 rounded-full text-slate-300 border border-slate-600"
+                  >spots left</span
+                >
+              </div>
+              <div class="mt-4 flex flex-wrap gap-4 text-xs text-slate-400">
+                <div class="flex items-center gap-1">
+                  <i data-lucide="trending-up" class="w-3 h-3"></i> Occupancy
+                  rate: <span id="occupancyRate">0</span>%
+                </div>
+                <div class="flex items-center gap-1">
+                  <i data-lucide="wifi" class="w-3 h-3"></i> Last sync:
+                  <span id="lastSyncTime">just now</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex flex-col items-end">
+              <div class="bg-slate-800/60 p-3 rounded-2xl">
+                <i data-lucide="activity" class="w-8 h-8 text-cyan-400"></i>
+              </div>
+            </div>
+          </div>
+          <div class="mt-5 w-full bg-slate-800/60 rounded-full h-2.5">
+            <div
+              class="bg-gradient-to-r from-emerald-500 to-cyan-400 h-2.5 rounded-full transition-all duration-500"
+              id="occupancyBar"
+              style="width: 100%"
+            ></div>
+          </div>
+        </div>
+        <!-- latency + system metrics mini card -->
+        <div
+          class="bg-slate-900/50 border border-slate-700/50 rounded-2xl p-5 flex flex-col justify-between backdrop-blur-sm"
+        >
+          <div class="flex justify-between items-start">
+            <span class="text-slate-300 text-sm font-medium"
+              >System latency</span
+            >
+            <i data-lucide="gauge" class="w-5 h-5 text-slate-400"></i>
+          </div>
+          <div class="mt-2">
+            <span class="text-4xl font-mono font-bold text-white" id="latencyMs"
+              >23</span
+            >
+            <span class="text-slate-400 text-sm"> ms</span>
+          </div>
+          <div class="mt-3 flex justify-between text-[11px] text-slate-500">
+            <span>🔵 Firebase: active</span>
+            <span>🟢 API: 200</span>
+          </div>
+          <div
+            class="mt-2 text-[11px] text-emerald-400/80 flex items-center gap-1"
+          >
+            <i data-lucide="check-circle-2" class="w-3 h-3"></i> Edge sync OK
+          </div>
+        </div>
+      </div>
+
+      <!-- ========= 2. ACTIVE GATES MONITOR (5 CARDS) ========= -->
+      <div class="mb-10">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg md:text-xl font-semibold flex items-center gap-2">
+            <i data-lucide="server" class="w-5 h-5 text-cyan-400"></i>
+            Decentralized Gate Controllers
+          </h2>
+          <span
+            class="text-xs bg-slate-800 px-3 py-1 rounded-full text-slate-300"
+            >5 edge servers • real-time status</span
+          >
+        </div>
+        <div
+          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4"
+          id="gatesContainer"
+        >
+          <!-- dynamically injected gate cards -->
+        </div>
+      </div>
+
+      <!-- ========= 3. MANUAL CONTROL PANEL (XE VÀO / XE RA) ========= -->
+      <div
+        class="bg-gradient-to-r from-slate-900/90 to-slate-900/70 rounded-2xl border border-slate-700/60 p-5 md:p-6 mb-10 shadow-xl"
+      >
+        <div class="flex flex-col md:flex-row gap-5 items-end">
+          <div class="flex-1 w-full">
+            <label
+              class="block text-slate-300 text-sm font-semibold mb-2 flex items-center gap-2"
+              ><i data-lucide="scan-line" class="w-4 h-4"></i> Biển số xe /
+              License plate</label
+            >
+            <input
+              type="text"
+              id="licenseInput"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl py-3.5 px-5 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/60 transition text-lg font-mono"
+              placeholder="Ví dụ: 43A-123.45  |  29H-678.90"
+            />
+          </div>
+          <div class="flex gap-3 w-full md:w-auto">
+            <button
+              id="checkinBtn"
+              class="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg flex items-center gap-2 transition-all duration-200 text-base"
+            >
+              <i data-lucide="log-in" class="w-5 h-5"></i> XE VÀO (Check-in)
+            </button>
+            <button
+              id="checkoutBtn"
+              class="bg-gradient-to-r from-rose-600 to-orange-600 hover:from-rose-500 hover:to-orange-500 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg flex items-center gap-2 transition-all duration-200 text-base"
+            >
+              <i data-lucide="log-out" class="w-5 h-5"></i> XE RA (Check-out)
+            </button>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 mt-3 flex items-center gap-1">
+          <i data-lucide="info" class="w-3 h-3"></i> Hệ thống cập nhật real-time
+          số lượng chỗ trống, gate xử lý và ghi log MongoDB Atlas
+        </p>
+      </div>
+
+      <!-- ========= 4. HISTORY LOG / BIG DATA TABLE (MongoDB Atlas style) ========= -->
+      <div>
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <div class="flex items-center gap-2">
+            <i data-lucide="database" class="w-5 h-5 text-blue-400"></i>
+            <h2 class="text-lg md:text-xl font-semibold text-white">
+              Transaction Logs · MongoDB Atlas
+            </h2>
+            <span
+              class="bg-blue-500/10 text-blue-300 text-xs px-2 py-0.5 rounded-full"
+              >live collection</span
+            >
+          </div>
+          <div class="flex gap-2">
+            <button
+              id="exportCsvBtn"
+              class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm px-4 py-2 rounded-xl flex items-center gap-2 transition-all border border-slate-700"
+            >
+              <i data-lucide="download" class="w-4 h-4"></i> Export CSV
+            </button>
+            <button
+              id="filterMockBtn"
+              class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm px-4 py-2 rounded-xl flex items-center gap-2 transition-all border border-slate-700"
+            >
+              <i data-lucide="sliders-horizontal" class="w-4 h-4"></i> Filter
+              logs
+            </button>
+          </div>
+        </div>
+        <div
+          class="bg-slate-900/40 rounded-2xl border border-slate-700/60 overflow-x-auto shadow-inner custom-scrollbar"
+        >
+          <table class="min-w-full text-sm">
+            <thead class="bg-slate-800/70 border-b border-slate-700">
+              <tr
+                class="text-left text-slate-300 font-semibold text-xs md:text-sm"
+              >
+                <th class="py-4 px-4 md:px-5">Timestamp</th>
+                <th class="py-4 px-4 md:px-5">Action</th>
+                <th class="py-4 px-4 md:px-5">License Plate</th>
+                <th class="py-4 px-4 md:px-5">Handled By (Gate)</th>
+                <th class="py-4 px-4 md:px-5">Sync Status</th>
+              </tr>
+            </thead>
+            <tbody id="logTableBody" class="divide-y divide-slate-800/50">
+              <!-- dynamic rows -->
+            </tbody>
+          </table>
+          <div
+            id="emptyLogMsg"
+            class="text-center py-12 text-slate-500 text-sm hidden"
+          >
+            Không có dữ liệu. Hãy thực hiện check-in/out để tạo log.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ---------- CONFIG ----------
+      const TOTAL_SPOTS = 100;
+      let availableSpots = TOTAL_SPOTS;
+      // 5 Gates data
+      let gatesData = [
+        {
+          id: "Gate_01",
+          name: "Gate_01",
+          status: "online",
+          processMsg: "Idle",
+          location: "Lối Bắc",
+        },
+        {
+          id: "Gate_02",
+          name: "Gate_02",
+          status: "online",
+          processMsg: "Idle",
+          location: "Lối Nam",
+        },
+        {
+          id: "Gate_03",
+          name: "Gate_03",
+          status: "online",
+          processMsg: "Processing...",
+          location: "Cổng Đông",
+        },
+        {
+          id: "Gate_04",
+          name: "Gate_04",
+          status: "offline",
+          processMsg: "Offline 🔴",
+          location: "Cổng Tây",
+        },
+        {
+          id: "Gate_05",
+          name: "Gate_05",
+          status: "online",
+          processMsg: "Idle",
+          location: "Trung tâm",
+        },
+      ];
+
+      // Transaction logs (simulate MongoDB documents)
+      let transactionLogs = [];
+
+      async function fetchRealLogs() {
+        try {
+          const response = await fetch(
+            "http://localhost:8081/api/parking/history",
+          );
+          const realData = await response.json();
+
+          // Chuyển đổi dữ liệu từ Spring Boot sang chuẩn của Giao diện
+          transactionLogs = realData.map((log) => ({
+            timestamp: log.thoiGian.substring(11, 19), // Cắt lấy giờ:phút:giây
+            action: log.hanhDong === "VAO" ? "Entry" : "Exit",
+            licensePlate: log.bienSo,
+            handledBy: log.congXuly,
+            syncStatus: "Synced", // Đã nằm trên Atlas tức là đã Synced
+          }));
+
+          renderLogsTable();
+          updateActiveGates(); // Cập nhật Server nào đang sống dựa trên Log
+        } catch (error) {
+          console.error("Lỗi khi tải lịch sử từ MongoDB:", error);
+        }
+      }
+
+      // Helper: update all UI (counter, bar, gates, table, occupancy rate)
+      function refreshAllUI() {
+        // available spots number
+        document.getElementById("availableSpotsCount").innerText =
+          availableSpots;
+        document.getElementById("totalSpots").innerText = TOTAL_SPOTS;
+        const occupied = TOTAL_SPOTS - availableSpots;
+        const occupancyPercent = Math.round((occupied / TOTAL_SPOTS) * 100);
+        document.getElementById("occupancyRate").innerText = occupancyPercent;
+        const barPercent = (availableSpots / TOTAL_SPOTS) * 100;
+        document.getElementById("occupancyBar").style.width = `${barPercent}%`;
+
+        // update last sync time (simulate firebase)
+        const now = new Date();
+        const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}`;
+        document.getElementById("lastSyncTime").innerHTML = timeStr;
+
+        // Render Gates
+        const container = document.getElementById("gatesContainer");
+        container.innerHTML = "";
+        gatesData.forEach((gate) => {
+          const isOnline = gate.status === "online";
+          const statusDot = isOnline ? "bg-emerald-500" : "bg-red-500";
+          const statusText = isOnline ? "Online / Active" : "Offline";
+          const borderColor = isOnline
+            ? "border-emerald-500/40"
+            : "border-red-500/40";
+          const bgCard = "bg-slate-800/40";
+          const processMsgText = gate.processMsg;
+          const gateDiv = document.createElement("div");
+          gateDiv.className = `gate-tile ${bgCard} border ${borderColor} rounded-xl p-4 backdrop-blur-sm transition-all duration-200`;
+          gateDiv.innerHTML = `
+          <div class="flex justify-between items-start">
+            <div class="flex items-center gap-2">
+              <i data-lucide="gate" class="w-5 h-5 ${isOnline ? "text-emerald-400" : "text-red-400"}"></i>
+              <span class="font-bold text-white text-sm md:text-base">${gate.name}</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="relative flex h-2.5 w-2.5">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full ${isOnline ? "bg-emerald-400" : "bg-red-400"} opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 ${statusDot}"></span>
+              </span>
+              <span class="text-[11px] font-medium ${isOnline ? "text-emerald-300" : "text-red-300"}">${statusText}</span>
+            </div>
+          </div>
+          <div class="mt-3 flex items-center gap-1.5 text-slate-300 text-xs">
+            <i data-lucide="cpu" class="w-3 h-3"></i>
+            <span class="truncate">${processMsgText}</span>
+          </div>
+          <div class="mt-2 text-[10px] text-slate-500">${gate.location}</div>
+        `;
+          container.appendChild(gateDiv);
+        });
+
+        // render logs table
+        renderLogsTable();
+        // reinit lucide icons
+        lucide.createIcons();
+      }
+
+      function renderLogsTable() {
+        const tbody = document.getElementById("logTableBody");
+        const emptyMsg = document.getElementById("emptyLogMsg");
+        if (!transactionLogs.length) {
+          tbody.innerHTML = "";
+          emptyMsg.classList.remove("hidden");
+          return;
+        }
+        emptyMsg.classList.add("hidden");
+        tbody.innerHTML = "";
+        // show newest first
+        [...transactionLogs].reverse().forEach((log) => {
+          const row = document.createElement("tr");
+          row.className =
+            "border-b border-slate-800/30 hover:bg-slate-800/30 transition";
+          const actionBadge =
+            log.action === "Entry"
+              ? '<span class="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded-full text-xs font-semibold"><i data-lucide="arrow-right-circle" class="w-3 h-3"></i> Entry</span>'
+              : '<span class="inline-flex items-center gap-1 bg-orange-500/20 text-orange-300 px-2.5 py-1 rounded-full text-xs font-semibold"><i data-lucide="arrow-left-circle" class="w-3 h-3"></i> Exit</span>';
+          const syncIcon =
+            log.syncStatus === "Synced"
+              ? '<span class="flex items-center gap-1 text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded-md text-[11px] font-mono"><i data-lucide="check-circle" class="w-3 h-3"></i> Synced</span>'
+              : '<span class="flex items-center gap-1 text-yellow-400 bg-yellow-950/40 px-2 py-0.5 rounded-md text-[11px] font-mono"><i data-lucide="clock" class="w-3 h-3"></i> Pending</span>';
+          row.innerHTML = `
+          <td class="py-3 px-4 md:px-5 font-mono text-slate-300 text-xs">${log.timestamp}</td>
+          <td class="py-3 px-4 md:px-5">${actionBadge}</td>
+          <td class="py-3 px-4 md:px-5 font-semibold text-white tracking-wide">${log.licensePlate}</td>
+          <td class="py-3 px-4 md:px-5 text-slate-300 text-sm">${log.handledBy}</td>
+          <td class="py-3 px-4 md:px-5">${syncIcon}</td>
+        `;
+          tbody.appendChild(row);
+        });
+        lucide.createIcons();
+      }
+
+      // Set temporary gate processing message (simulate realtime action)
+      function setGateTempMsg(gateId, tempMsg, duration = 2000) {
+        const gate = gatesData.find((g) => g.id === gateId);
+        if (gate && gate.status !== "offline") {
+          const oldMsg = gate.processMsg;
+          gate.processMsg = tempMsg;
+          refreshAllUI();
+          setTimeout(() => {
+            const freshGate = gatesData.find((g) => g.id === gateId);
+            if (freshGate && freshGate.status !== "offline") {
+              freshGate.processMsg =
+                oldMsg === "Processing..."
+                  ? "Idle"
+                  : oldMsg.includes("Offline")
+                    ? "Offline 🔴"
+                    : "Idle";
+              refreshAllUI();
+            } else if (freshGate && freshGate.status === "offline") {
+              freshGate.processMsg = "Offline 🔴";
+              refreshAllUI();
+            }
+          }, duration);
+        }
+      }
+
+      // Add new log entry (MongoDB style)
+      function addTransaction(action, licensePlate, gateId) {
+        const now = new Date();
+        const timestamp = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}`;
+        const syncStatus = Math.random() > 0.15 ? "Synced" : "Pending";
+        const newEntry = {
+          timestamp: timestamp,
+          action: action === "Entry" ? "Entry" : "Exit",
+          licensePlate: licensePlate,
+          handledBy: gateId,
+          syncStatus: syncStatus,
+        };
+        transactionLogs.unshift(newEntry);
+        if (transactionLogs.length > 45) transactionLogs.pop();
+        refreshAllUI();
+      }
+
+      // simulate API call latency and update widget
+      function updateLatencyMock() {
+        const simulatedLatency = Math.floor(Math.random() * 28) + 15; // 15-43ms
+        document.getElementById("latencyMs").innerText = simulatedLatency;
+      }
+
+      // HÀM MỚI: Kiểm tra xem xe đang ở TRONG hay NGOÀI bãi dựa vào lịch sử
+      function checkCarStatus(plate) {
+        // Tìm giao dịch gần nhất của biển số này trong mảng transactionLogs
+        const lastTx = transactionLogs.find(log => log.licensePlate === plate);
+        
+        if (!lastTx) return "OUT"; // Chưa từng quẹt, mặc định là ở ngoài
+        return lastTx.action === "Entry" ? "IN" : "OUT";
+      }
+
+      // Main parking transaction logic (GỌI API THẬT XUỐNG SPRING BOOT)
+      async function parkingTransaction(action, licensePlateRaw) {
+        const plate = licensePlateRaw.trim().toUpperCase();
+        if (!plate) {
+          alert("❌ Vui lòng nhập biển số xe hợp lệ (VD: 43A-123.45)");
+          return false;
+        }
+
+        // --- BỔ SUNG LOGIC KIỂM TRA TRÙNG LẶP ---
+        const currentStatus = checkCarStatus(plate);
+        
+        if (action === "Entry" && currentStatus === "IN") {
+          alert(`🚫 LỖI BẢO MẬT: Xe [ ${plate} ] HIỆN ĐANG Ở TRONG BÃI!\nKhông thể thực hiện quẹt thẻ VÀO thêm lần nữa.`);
+          return false;
+        }
+        
+        if (action === "Exit" && currentStatus === "OUT") {
+          alert(`⚠️ CẢNH BÁO: Xe [ ${plate} ] KHÔNG CÓ TRONG BÃI!\nKhông thể thực hiện quẹt thẻ RA.`);
+          return false;
+        }
+
+        // Kiểm tra logic cơ bản trước khi gọi Server
+        if (action === "Entry" && availableSpots <= 0) {
+          alert(" Bãi đỗ xe đã đầy! Không thể nhận thêm xe.");
+          return false;
+        } else if (action === "Exit" && availableSpots >= TOTAL_SPOTS) {
+          alert(" Không có xe trong bãi để thực hiện xe ra.");
+          return false;
+        }
+
+        // 1. TẠO ĐƯỜNG DẪN API (Dựa vào nút bấm là VÀO hay RA)
+        const apiPath = action === "Entry" ? "vao-bai" : "ra-bai";
+        const apiUrl = `http://localhost:8081/api/parking/${apiPath}?bienSo=${encodeURIComponent(plate)}`;
+
+        try {
+          // 2. BẮN API XUỐNG SERVER
+          const response = await fetch(apiUrl);
+          const resultText = await response.text(); // Lấy câu trả lời từ Spring Boot
+          console.log(" Server trả về:", resultText);
+
+          // 3. CẬP NHẬT GIAO DIỆN SAU KHI SERVER BÁO THÀNH CÔNG
+        //   if (action === "Entry") {
+        //     availableSpots -= 1;
+        //   } else {
+        //     availableSpots += 1;
+        //   }
+
+          // Chọn ngẫu nhiên 1 cổng online để hiển thị animation cho đẹp
+          const onlineGates = gatesData.filter((g) => g.status === "online");
+          let chosenGate = onlineGates.length
+            ? onlineGates[Math.floor(Math.random() * onlineGates.length)]
+            : gatesData[0];
+
+          const actionTextVn = action === "Entry" ? " XE VÀO" : " XE RA";
+          setGateTempMsg(chosenGate.id, `${actionTextVn} ${plate}`, 2100);
+
+          // Thêm log vào bảng giao diện
+          addTransaction(action, plate, chosenGate.id);
+
+          // Cập nhật độ trễ (Latency)
+          const startPerf = performance.now();
+          setTimeout(() => {
+            const endPerf = performance.now();
+            let calcLat = Math.floor(endPerf - startPerf);
+            document.getElementById("latencyMs").innerText = Math.min(
+              65,
+              Math.max(12, calcLat),
+            );
+          }, 50);
+
+          refreshAllUI();
+          return true;
+        } catch (error) {
+          console.error("Lỗi gọi API:", error);
+          alert(
+            "Lỗi kết nối đến Server Spring Boot! Hãy kiểm tra xem Server (Cổng 8081) đã bật chưa.",
+          );
+          return false;
+        }
+      }
+
+      // Event listeners
+      document.getElementById("checkinBtn").addEventListener("click", () => {
+        const input = document.getElementById("licenseInput");
+        if (parkingTransaction("Entry", input.value)) {
+          input.value = "";
+        }
+      });
+      document.getElementById("checkoutBtn").addEventListener("click", () => {
+        const input = document.getElementById("licenseInput");
+        if (parkingTransaction("Exit", input.value)) {
+          input.value = "";
+        }
+      });
+
+      // Export CSV
+      document.getElementById("exportCsvBtn").addEventListener("click", () => {
+        const headers = [
+          "Timestamp",
+          "Action",
+          "License Plate",
+          "Handled By",
+          "Sync Status",
+        ];
+        const rows = transactionLogs.map((log) => [
+          log.timestamp,
+          log.action,
+          log.licensePlate,
+          log.handledBy,
+          log.syncStatus,
+        ]);
+        const csvLines = [headers, ...rows]
+          .map((row) => row.map((cell) => `"${cell}"`).join(","))
+          .join("\n");
+        const blob = new Blob(["\uFEFF" + csvLines], {
+          type: "text/csv;charset=utf-8;",
+        });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.setAttribute("download", "parking_mongodb_logs.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      });
+
+      // Filter demo
+      document.getElementById("filterMockBtn").addEventListener("click", () => {
+        alert(
+          "🔍 Bộ lọc nâng cao (demo): Lọc theo ngày, cổng hoặc trạng thái đồng bộ. Tích hợp MongoDB Atlas aggregation pipeline.",
+        );
+      });
+
+
+      // Initial load
+      refreshAllUI();
+      lucide.createIcons();
+      fetchRealLogs();
+      // Cứ 3 giây lại chạy đi lấy dữ liệu 1 lần (Để thấy Web tự nhảy số realtime)
+      setInterval(fetchRealLogs, 3000);
+
+      // ==========================================
+      // KẾT NỐI FIREBASE REALTIME DATABASE TRỰC TIẾP
+      // ==========================================
+      const firebaseConfig = {
+        // Link này lấy chuẩn từ ảnh của Huy luôn:
+        databaseURL: "https://parksync-e31a0-default-rtdb.asia-southeast1.firebasedatabase.app/",
+      };
+      
+      // Khởi tạo Firebase
+      firebase.initializeApp(firebaseConfig);
+      const db = firebase.database();
+      
+      db.ref("parking_status/available_spots").on("value", (snapshot) => {
+        const realSpots = snapshot.val(); 
+        
+        console.log("🔥 [FIREBASE SYNC] Nhận số chỗ trống từ Cloud:", realSpots);
+
+        if (realSpots !== null) {
+          availableSpots = realSpots; 
+          
+          refreshAllUI(); 
+        }
+      });
+    </script>
+  </body>
+</html>
