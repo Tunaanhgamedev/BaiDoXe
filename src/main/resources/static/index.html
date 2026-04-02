@@ -373,7 +373,8 @@
       async function fetchRealLogs() {
         try {
           const response = await fetch(
-            "http://localhost:8081/api/parking/history",
+            // "http://localhost:8081/api/parking/history",
+            "https://cloudpark-iq-huy.onrender.com/api/parking/history",
           );
           const realData = await response.json();
 
@@ -577,20 +578,13 @@
 
         // 1. TẠO ĐƯỜNG DẪN API (Dựa vào nút bấm là VÀO hay RA)
         const apiPath = action === "Entry" ? "vao-bai" : "ra-bai";
-        const apiUrl = `http://localhost:8081/api/parking/${apiPath}?bienSo=${encodeURIComponent(plate)}`;
-
+        //const apiUrl = `http://localhost:8081/api/parking/${apiPath}?bienSo=${encodeURIComponent(plate)}`;
+        const apiUrl = `https://cloudpark-iq-huy.onrender.com/api/parking/${apiPath}?bienSo=${encodeURIComponent(plate)}`;
         try {
           // 2. BẮN API XUỐNG SERVER
           const response = await fetch(apiUrl);
           const resultText = await response.text(); // Lấy câu trả lời từ Spring Boot
           console.log(" Server trả về:", resultText);
-
-          // 3. CẬP NHẬT GIAO DIỆN SAU KHI SERVER BÁO THÀNH CÔNG
-        //   if (action === "Entry") {
-        //     availableSpots -= 1;
-        //   } else {
-        //     availableSpots += 1;
-        //   }
 
           // Chọn ngẫu nhiên 1 cổng online để hiển thị animation cho đẹp
           const onlineGates = gatesData.filter((g) => g.status === "online");

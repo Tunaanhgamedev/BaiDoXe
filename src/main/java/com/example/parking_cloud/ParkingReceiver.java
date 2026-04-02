@@ -30,124 +30,114 @@ public class ParkingReceiver {
     @Value("${server.gate.name:DEFAULT_GATE}")
     private String myGateName; // Tên cổng của máy này (VD: GATE_HUY)
 
-    private int availableSpots = 100;  // Giả sử bãi có 100 chỗ trống ban đầu
+    private int availableSpots = 100; // Giả sử bãi có 100 chỗ trống ban đầu
+
+    private static final int BUSY_THRESHOLD = 2; // Cổng bận khi đang xử lý từ 2 xe
+    private java.util.concurrent.atomic.AtomicInteger activeTasks = new java.util.concurrent.atomic.AtomicInteger(0);
 
     // ====================================================================
-    // LUỒNG 1: TRANH VIỆC (Chỉ 1 máy giật được phiếu từ queue_xin_vao)
+    // LUỒNG 1: ĐIỀU PHỐI PHÂN TÁN (Cổng nào rảnh nhất sẽ tự nhặt việc)
     // ====================================================================
-    @RabbitListener(queues = RabbitMQConfig.WORK_QUEUE)
-    public void processEntryRequest(String thongTinXe) {
-        System.out.println("[" + myGateName + "] DA CHOP DUOC PHIEU CUA XE: " + thongTinXe);
+    @RabbitListener(queues = RabbitMQConfig.DISTRIBUTED_QUEUE)
+    public void handleDistributedWork(String thongTinXe) {
+        // 1. Phát tín hiệu "Đang xử lý" để các cổng khác đều biết
+        String startSignal = "START|" + thongTinXe + "|" + myGateName;
+        rabbitTemplate.convertAndSend(RabbitMQConfig.SYNC_EXCHANGE, "", startSignal);
 
-        // Tách chuỗi để lấy hành động (VAO/RA)
-        String[] parts = thongTinXe.split("\\|");
-        
-        // BẢO VỆ 1: Lọc tin nhắn rác hoặc định dạng sai
-        if (parts.length < 2) {
-            System.err.println("BO QUA TIN NHAN RAC: " + thongTinXe);
-            return;
-        }
-
-        String action = parts[0];
-
-        // Nếu xe muốn VÀO nhưng bãi đã hết chỗ -> Từ chối ngay
-        if (action.equals("VAO") && availableSpots <= 0) {
-            System.out.println("[" + myGateName + "] BAI DA DAY, TU CHOI XE VAO!");
-            return;
-        }
-
-        // Đóng gói tin nhắn đồng bộ. Nối thêm tên Cổng bằng dấu "|"
-        // Kết quả sẽ có dạng: "VAO|43A123|GATE_HUY" hoặc "RA|43A123|GATE_HUY"
-        String syncMessage = thongTinXe + "|" + myGateName;
-        
-        // HÉT LÊN LOA ĐỂ BÁO CHO 4 ANH EM CÒN LẠI!
-        System.out.println("[" + myGateName + "] HOP LE! BAN LEN LOA DONG BO: " + syncMessage);
-        rabbitTemplate.convertAndSend(RabbitMQConfig.SYNC_EXCHANGE, "", syncMessage);
+        // 2. Tiến hành xử lý nghiệp vụ
+        processWork(thongTinXe);
     }
 
-    // ====================================================================
-    // LUỒNG 2: NGHE ĐỒNG BỘ (Cả 5 máy cùng nghe loa để update MySQL)
-    // ====================================================================
-    // ====================================================================
-    // LUỒNG 2: NGHE ĐỒNG BỘ (Cả 5 máy cùng nghe loa để update MySQL)
-    // ====================================================================
-    // ====================================================================
-    // LUỒNG 2: NGHE ĐỒNG BỘ (Cả 5 máy cùng nghe loa để update MySQL)
-    // ====================================================================
-    @RabbitListener(queues = "#{syncQueue.name}")
-    public void syncDatabase(String syncMessage) {
-        System.out.println("[" + myGateName + "] NGHE TU LOA TONG: " + syncMessage);
-
+    // Logic xử lý chính (Hợp nhất từ processEntryRequest)
+    private void processWork(String thongTinXe) {
+        activeTasks.incrementAndGet();
         try {
-            // Tách tin nhắn thành 3 phần chuẩn xác
-            String[] parts = syncMessage.split("\\|");
-            
-            // BẢO VỆ 2: Loại bỏ các bản tin cũ bị lỗi còn kẹt trong RabbitMQ
-            if (parts.length < 3) {
-                System.err.println("BO QUA TIN DONG BO CU/LOI: " + syncMessage);
+            System.out.println("[" + myGateName + "] DANG XU LY XE: " + thongTinXe);
+
+            // Tách chuỗi để lấy hành động (VAO/RA)
+            String[] parts = thongTinXe.split("\\|");
+            if (parts.length < 2)
+                return;
+
+            String action = parts[0];
+
+            // Nếu xe muốn VÀO nhưng bãi đã hết chỗ -> Từ chối ngay
+            if (action.equals("VAO") && availableSpots <= 0) {
+                System.out.println("[" + myGateName + "] BAI DA DAY, TU CHOI XE VAO!");
                 return;
             }
 
-            String action = parts[0];     // VAO hoặc RA
-            String bienSoXe = parts[1];   // Biển số xe
-            String nguoiDuyet = parts[2]; // Tên máy đã duyệt (VD: GATE_HUY)
+            // Phát loa đồng bộ cho 4 anh em còn lại
+            String syncMessage = thongTinXe + "|" + myGateName;
+            System.out.println("[" + myGateName + "] BAN LEN LOA DONG BO: " + syncMessage);
+            rabbitTemplate.convertAndSend(RabbitMQConfig.SYNC_EXCHANGE, "", syncMessage);
+        } finally {
+            activeTasks.decrementAndGet();
+        }
+    }
 
-            // ===============================================================
-            // 1. MySQL GÁC CỔNG: Kiểm tra xem xe đang ở TRONG hay NGOÀI bãi
-            // ===============================================================
+    @RabbitListener(queues = "#{syncQueue.name}")
+    public void syncDatabase(String syncMessage) {
+        // Kiểm tra nếu là tín hiệu bắt đầu xử lý (chỉ để Log, không lưu DB)
+        if (syncMessage.startsWith("START|")) {
+            String[] signalParts = syncMessage.split("\\|");
+            if (signalParts.length >= 3) {
+                System.out.println(">>> [TÍN HIỆU HỆ THỐNG] " + signalParts[2] + " ĐANG TIẾP NHẬN XE: " + signalParts[1]);
+            }
+            return;
+        }
+
+        System.out.println("[" + myGateName + "] NHAN TIN HIEU DONG BO: " + syncMessage);
+        try {
+            String[] parts = syncMessage.split("\\|");
+            if (parts.length < 3)
+                return;
+
+            String action = parts[0];
+            String bienSoXe = parts[1];
+            String nguoiDuyet = parts[2];
+
             ParkingSlot xeTrongBai = repository.findFirstBySlotNameContaining(bienSoXe);
 
             if (action.equals("VAO")) {
-                if (xeTrongBai != null) {
-                    System.err.println("🚫 LỖI BẢO MẬT: Xe " + bienSoXe + " ĐÃ CÓ TRONG BÃI! Hủy lưu trữ.");
-                    return; // Đuổi về, không làm gì tiếp
-                }
-                
-                // Xe hợp lệ -> LƯU MỚI VÀO MySQL
-                ParkingSlot slotMoi = new ParkingSlot(); 
-                slotMoi.setSlotName("XE CUA: " + bienSoXe); 
+                if (xeTrongBai != null)
+                    return;
+
+                ParkingSlot slotMoi = new ParkingSlot();
+                slotMoi.setSlotName("XE CUA: " + bienSoXe);
                 slotMoi.setOccupied(true);
                 repository.saveAndFlush(slotMoi);
-                System.out.println("DA LUU DONG MỚI VÀO MySQL CHO XE: " + bienSoXe);
 
-                if (availableSpots > 0) {
-                    availableSpots--; // Trừ chỗ
-                } 
+                availableSpots--; // Cập nhật biến local để máy mình biết
+
+                // CHỈ MÁY CHỦ DUYỆT MỚI GỌI FIREBASE ĐỂ TRỪ 1
+                if (nguoiDuyet.equals(myGateName)) {
+                    firebaseService.updateSpotsOnWeb(-1); // TRUYỀN -1 LÀ ĐÚNG
+                }
 
             } else if (action.equals("RA")) {
-                if (xeTrongBai == null) {
-                    System.err.println("⚠️ CẢNH BÁO: Xe " + bienSoXe + " KHÔNG CÓ TRONG BÃI! Hủy lưu trữ.");
-                    return; // Đuổi về, không làm gì tiếp
-                }
-                
-                // Xe hợp lệ -> XÓA LUÔN KHỎI MySQL CHO NHẸ DATABASE
-                repository.delete(xeTrongBai);
-                repository.flush(); // Ép xóa ngay lập tức
-                System.out.println("ĐÃ XÓA XE KHỎI MySQL: " + bienSoXe);
+                if (xeTrongBai == null)
+                    return;
 
-                if (availableSpots < 100) { 
-                    availableSpots++; // Cộng chỗ
+                repository.delete(xeTrongBai);
+                repository.flush();
+
+                availableSpots++; // Cập nhật biến local
+
+                if (nguoiDuyet.equals(myGateName)) {
+                    firebaseService.updateSpotsOnWeb(1); // TRUYỀN 1 LÀ ĐÚNG
                 }
             }
-            // ===============================================================
 
-            // 2. MONGODB ATLAS GHI SỔ: Lưu nhật ký (Không bao giờ xóa)
             ParkingLog logEntry = new ParkingLog();
             logEntry.setBienSo(bienSoXe);
             logEntry.setHanhDong(action);
-            logEntry.setCongXuly(nguoiDuyet); 
-            logEntry.setThoiGian(new java.util.Date().toString()); 
-            
+            logEntry.setCongXuly(nguoiDuyet);
+            logEntry.setThoiGian(new java.util.Date().toString());
             parkingLogRepository.save(logEntry);
-            System.out.println("[MONGODB] Đã ghi nhận nhật ký xe " + bienSoXe + " lên Atlas thành công!");
-
-            // 3. BẮN LÊN FIREBASE (Báo cáo số lượng chỗ trống mới nhất)
-            firebaseService.updateSpotsOnWeb(availableSpots); 
-            System.out.println("DA BAO CAO SO LUONG CHO TRONG: " + availableSpots);
 
         } catch (Exception e) {
             System.err.println("LOI XU LY DONG BO: " + e.getMessage());
-            e.printStackTrace(); 
         }
     }
 }
