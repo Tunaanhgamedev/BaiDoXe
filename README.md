@@ -1,1 +1,3 @@
 # BaiDoXe
+
+hệ phân tán
